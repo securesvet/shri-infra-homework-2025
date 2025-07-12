@@ -7,7 +7,7 @@
     "watch": "webpack --watch",
     "test": "jest",
     "lint": "eslint ./src",
-    "build:docker": "",
+    "build:docker": "docker build . -t shri-infra",
     "start:docker": ""
   },
   "dependencies": {

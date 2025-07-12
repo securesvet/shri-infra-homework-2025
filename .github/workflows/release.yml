@@ -1,0 +1,109 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+
+  release:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # нужно для git log и тегов
+
+      - name: Set release version
+        id: vars
+        run: echo "VERSION=${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      - name: Create release branch
+        run: |
+          git checkout -b releases/${{ steps.vars.outputs.VERSION }}
+          git push origin releases/${{ steps.vars.outputs.VERSION }}
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Yandex Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: cr.yandex
+          username: ${{ secrets.YC_USERNAME }}
+          password: ${{ secrets.YC_PASSWORD }}
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t $IMAGE_NAME:${{ steps.vars.outputs.VERSION }} .
+          docker tag $IMAGE_NAME:${{ steps.vars.outputs.VERSION }} $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}_latest
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}_latest
+
+      - name: Create Git Tag
+        run: |
+          git tag ${{ steps.vars.outputs.VERSION }}
+          git push origin ${{ steps.vars.outputs.VERSION }}
+
+      - name: Get Previous Tag
+        id: prev_tag
+        run: |
+          PREV_TAG=$(git tag --sort=-creatordate | grep -E '^[0-9]+$' | head -n 1)
+          echo "previous_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+
+      - name: Get commit list since previous tag
+        id: changelog
+        run: |
+          if [ -z "${{ steps.prev_tag.outputs.previous_tag }}" ]; then
+            COMMITS=$(git log --pretty=format:"* %s (%h)")
+          else
+            COMMITS=$(git log ${{ steps.prev_tag.outputs.previous_tag }}..HEAD --pretty=format:"* %s (%h)")
+          fi
+          echo "$COMMITS" > commits.txt
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Release ${{ steps.vars.outputs.VERSION }}" \
+            --body "**Date:** $(date)\n**Author:** ${{ github.actor }}\n**Version:** ${{ steps.vars.outputs.VERSION }}\n**Commits:**\n${{ steps.changelog.outputs.commits }}\n\nDocker: $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}" \
+            --label release
+
+      - name: Update CHANGELOG.md
+        run: |
+          echo -e "## Release ${{ steps.vars.outputs.VERSION }} - $(date)\n\n${{ steps.changelog.outputs.commits }}\n\n$(cat CHANGELOG.md)" > CHANGELOG.md
+
+      - name: Commit CHANGELOG.md
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add CHANGELOG.md
+          git commit -m "docs: update changelog for release ${{ steps.vars.outputs.VERSION }}"
+          git push origin HEAD:releases/${{ steps.vars.outputs.VERSION }}

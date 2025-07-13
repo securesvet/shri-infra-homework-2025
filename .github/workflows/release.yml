@@ -71,21 +71,28 @@ jobs:
       - name: Get Previous Tag
         id: prev_tag
         run: |
-          PREV_TAG=$(git tag --sort=-creatordate | grep -E '^[0-9]+$' | head -n 1)
-          echo "previous_tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          git fetch --tags
+          PREV=$(git tag --sort=-creatordate | grep -E "^${{ github.event.inputs.release_version }}(_fix[0-9]+)?$" | head -n 1)
+          echo "previous_tag=$PREV" >> $GITHUB_OUTPUT
 
       - name: Get commit list since previous tag
         id: changelog
         run: |
           if [ -z "${{ steps.prev_tag.outputs.previous_tag }}" ]; then
+            echo "⚠️ No previous tag found. Listing all commits."
             COMMITS=$(git log --pretty=format:"* %s (%h)")
           else
+            echo "Previous tag: ${{ steps.prev_tag.outputs.previous_tag }}"
             COMMITS=$(git log ${{ steps.prev_tag.outputs.previous_tag }}..HEAD --pretty=format:"* %s (%h)")
           fi
+
           echo "$COMMITS" > commits.txt
           echo "commits<<EOF" >> $GITHUB_OUTPUT
           echo "$COMMITS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Show tags
+        run: git tag --sort=-creatordate
 
       - name: Create GitHub Issue
         env:

@@ -93,7 +93,7 @@ jobs:
         run: |
           gh issue create \
             --title "Release ${{ steps.vars.outputs.VERSION }}" \
-            --body "**Date:** $(date)\n**Author:** ${{ github.actor }}\n**Version:** ${{ steps.vars.outputs.VERSION }}\n**Commits:**\n${{ steps.changelog.outputs.commits }}\n\nDocker: $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}" \
+            --body $'**Date:** $(date)\n**Author:** ${{ github.actor }}\n**Version:** ${{ steps.vars.outputs.VERSION }}\n**Commits:**\n${{ steps.changelog.outputs.commits }}\n\nDocker: $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}' \
             --label release
 
       - name: Update CHANGELOG.md

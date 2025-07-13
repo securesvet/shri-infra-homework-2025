@@ -48,6 +48,9 @@ jobs:
             docker rm app || true
             docker run -d --name app -p 80:3000 $IMAGE:${{ github.event.inputs.release_version }}_latest
 
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
       - name: Find related release issue
         id: find_issue
         env:

@@ -89,11 +89,18 @@ jobs:
 
       - name: Create GitHub Issue
         env:
-          GH_TOKEN: ${{ secrets.GIT_ISSUE_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "**Date:** $(date)" > issue_body.txt
+          echo "**Author:** ${{ github.actor }}" >> issue_body.txt
+          echo "**Version:** ${{ steps.vars.outputs.VERSION }}" >> issue_body.txt
+          echo -e "**Commits:**\n${{ steps.changelog.outputs.commits }}" >> issue_body.txt
+          echo "" >> issue_body.txt
+          echo "Docker: cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app:${{ steps.vars.outputs.VERSION }}" >> issue_body.txt
+
           gh issue create \
             --title "Release ${{ steps.vars.outputs.VERSION }}" \
-            --body $'**Date:** $(date)\n**Author:** ${{ github.actor }}\n**Version:** ${{ steps.vars.outputs.VERSION }}\n**Commits:**\n${{ steps.changelog.outputs.commits }}\n\nDocker: $IMAGE_NAME:${{ steps.vars.outputs.VERSION }}' \
+            --body-file issue_body.txt \
             --label release
 
       - name: Update CHANGELOG.md

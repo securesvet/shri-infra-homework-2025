@@ -42,7 +42,7 @@ jobs:
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
             IMAGE="cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app"
-            docker login --username json_key --password ${{ secrets.YC_SA_KEY }} cr.yandex
+            docker login --username json_key --password '${{ secrets.YC_SA_KEY }}' cr.yandex
             docker pull $IMAGE:${{ github.event.inputs.release_version }}_latest
             docker stop app || true
             docker rm app || true

@@ -16,18 +16,16 @@ jobs:
 
     steps:
       - name: Check if image exists
-        env:
-          YC_SA_KEY: ${{ secrets.YC_SA_KEY }}
         run: |
           IMAGE_TAG="${{ github.event.inputs.release_version }}_latest"
           echo "Checking image: $IMAGE:$IMAGE_TAG"
-          echo "$YC_SA_KEY" > key.json
+          echo "${{ secrets.YC_SA_KEY }}" > key.json
           cat key.json | docker login \
             --username json_key \
             --password-stdin \
             cr.yandex
           rm key.json
-          docker manifest inspect $IMAGE:$IMAGE_TAG > /dev/null
+          docker manifest inspect $IMAGE:$IMAGE_TAG > /dev/null; 
 
           if [ $? -ne 0 ]; then
             echo "❌ Image with tag $IMAGE_TAG not found in registry"

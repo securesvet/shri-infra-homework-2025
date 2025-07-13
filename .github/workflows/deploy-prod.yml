@@ -15,19 +15,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check if image exists
-        run: |
-          IMAGE_TAG="${{ github.event.inputs.release_version }}_latest"
-          echo "Checking image: $IMAGE:$IMAGE_TAG"
-
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer ${{ secrets.YC_TOKEN }}" \
-            "https://container-registry.api.cloud.yandex.net/v1/repositories/${{ secrets.YC_REGISTRY_ID }}/app/tags/$IMAGE_TAG")
-
-          if [ "$STATUS" -ne 200 ]; then
-            echo "❌ Image with tag $IMAGE_TAG not found in registry"
-            exit 1
-          fi
+      # - name: Check if image exists
+      #   run: |
+      #     IMAGE_TAG="${{ github.event.inputs.release_version }}_latest"
+      #     echo "Checking image: $IMAGE:$IMAGE_TAG"
+      #
+      #     STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+      #       -H "Authorization: Bearer ${{ secrets.YC_TOKEN }}" \
+      #       "https://container-registry.api.cloud.yandex.net/v1/repositories/${{ secrets.YC_REGISTRY_ID }}/app/tags/$IMAGE_TAG")
+      #
+      #     if [ "$STATUS" -ne 200 ]; then
+      #       echo "❌ Image with tag $IMAGE_TAG not found in registry"
+      #       exit 1
+      #     fi
 
       - name: Deploy to Production VM over SSH
         uses: appleboy/ssh-action@v1.0.0

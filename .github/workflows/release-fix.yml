@@ -100,8 +100,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GIT_ISSUE_TOKEN }}
         run: |
-          ISSUE=$(gh issue list --state open --limit 100 --search "Release ${{ steps.vars.outputs.BASE_VERSION }}" --json number,title | jq -r '.[0].number')
-          echo "issue_number=$ISSUE" >> $GITHUB_OUTPUT
+          ISSUE=$(gh issue list --state open --limit 100 --json number,title | jq -r --arg TITLE "Release ${{ steps.vars.outputs.BASE_VERSION }}" '.[] | select(.title == $TITLE) | .number' | head -n1)
+
+          if [ -z "$ISSUE" ]; then
+            echo "❌ No issue found with title: Release ${{ steps.vars.outputs.BASE_VERSION }}"
+          else
+            echo "✅ Found issue #$ISSUE"
+            echo "issue_number=$ISSUE" >> $GITHUB_OUTPUT
+          fi
 
       - name: Add comment to release issue
         if: steps.find_issue.outputs.issue_number != ''

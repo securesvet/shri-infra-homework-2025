@@ -14,18 +14,22 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+
     steps:
+      - name: Login to Yandex Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: cr.yandex
+          username: json_key
+          password: ${{ secrets.YC_SA_KEY }}
+
       - name: Check if image exists
         run: |
           IMAGE_TAG="${{ github.event.inputs.release_version }}_latest"
           echo "Checking image: $IMAGE:$IMAGE_TAG"
+          docker manifest inspect $IMAGE:$IMAGE_TAG > /dev/null; 
 
-          TOKEN=$(yc iam create-token)
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
-            "https://container-registry.api.cloud.yandex.net/v1/repositories/${{ secrets.YC_REGISTRY_ID }}/app/tags/$IMAGE_TAG")
-
-          if [ "$STATUS" -ne 200 ]; then
+          if [ $? -ne 0 ]; then
             echo "❌ Image with tag $IMAGE_TAG not found in registry"
             exit 1
           fi
@@ -37,6 +41,8 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_KEY }}
           script: |
+            IMAGE="cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app"
+            docker login --username json_key --password '${{ secrets.YC_SA_KEY }}' cr.yandex
             docker pull $IMAGE:${{ github.event.inputs.release_version }}_latest
             docker stop app || true
             docker rm app || true

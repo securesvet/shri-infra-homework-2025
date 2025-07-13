@@ -15,21 +15,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Install Yandex CLI
-        run: |
-          curl -sSL https://storage.yandexcloud.net/yandexcloud-yc/install.sh | bash
-          echo "${HOME}/yandex-cloud/bin" >> $GITHUB_PATH
-          export PATH="${HOME}/yandex-cloud/bin:$PATH"
-          yc --version
-
       - name: Check if image exists
         run: |
           IMAGE_TAG="${{ github.event.inputs.release_version }}_latest"
           echo "Checking image: $IMAGE:$IMAGE_TAG"
 
-          TOKEN=$(yc iam create-token)
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -H "Authorization: Bearer $TOKEN" \
+            -H "Authorization: Bearer ${{ secrets.YC_TOKEN }}" \
             "https://container-registry.api.cloud.yandex.net/v1/repositories/${{ secrets.YC_REGISTRY_ID }}/app/tags/$IMAGE_TAG")
 
           if [ "$STATUS" -ne 200 ]; then

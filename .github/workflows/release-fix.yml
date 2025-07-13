@@ -38,7 +38,7 @@ jobs:
       - run: npm test
 
   release-fix:
-    needs: [typecheck, test]
+    needs: [lint, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -1,0 +1,117 @@
+name: Release Fix
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., 5)'
+        required: true
+
+env:
+  IMAGE_NAME: cr.yandex/${{ secrets.YC_REGISTRY_ID }}/app
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: releases/${{ github.event.inputs.release_version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run typecheck
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: releases/${{ github.event.inputs.release_version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: 'npm'
+      - run: npm ci
+      - run: npm test
+
+  release-fix:
+    needs: [typecheck, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: releases/${{ github.event.inputs.release_version }}
+          fetch-depth: 0
+
+      - name: Set version info
+        id: vars
+        run: |
+          echo "FIX_VERSION=${{ github.event.inputs.release_version }}_fix${{ github.run_number }}" >> $GITHUB_OUTPUT
+          echo "BASE_VERSION=${{ github.event.inputs.release_version }}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Yandex Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: cr.yandex
+          username: json_key
+          password: ${{ secrets.YC_SA_KEY }}
+
+      - name: Build and Push Docker Image
+        run: |
+          docker build -t $IMAGE_NAME:${{ steps.vars.outputs.FIX_VERSION }} .
+          docker tag $IMAGE_NAME:${{ steps.vars.outputs.FIX_VERSION }} $IMAGE_NAME:${{ steps.vars.outputs.BASE_VERSION }}_latest
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.FIX_VERSION }}
+          docker push $IMAGE_NAME:${{ steps.vars.outputs.BASE_VERSION }}_latest
+
+      - name: Create Git Tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git tag ${{ steps.vars.outputs.FIX_VERSION }}
+          git push origin ${{ steps.vars.outputs.FIX_VERSION }}
+
+      - name: Get Previous Tag
+        id: prev_tag
+        run: |
+          PREV=$(git tag --sort=-creatordate | grep -E "^${{ steps.vars.outputs.BASE_VERSION }}(_fix[0-9]+)?$" | head -n 1)
+          echo "previous_tag=$PREV" >> $GITHUB_OUTPUT
+
+      - name: Get commit list since previous tag
+        id: changelog
+        run: |
+          if [ -z "${{ steps.prev_tag.outputs.previous_tag }}" ]; then
+            COMMITS=$(git log --pretty=format:"* %s (%h)")
+          else
+            COMMITS=$(git log ${{ steps.prev_tag.outputs.previous_tag }}..HEAD --pretty=format:"* %s (%h)")
+          fi
+          echo "$COMMITS" > commits.txt
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Find release issue
+        id: find_issue
+        env:
+          GH_TOKEN: ${{ secrets.GIT_ISSUE_TOKEN }}
+        run: |
+          ISSUE=$(gh issue list --state open --limit 100 --search "Release ${{ steps.vars.outputs.BASE_VERSION }}" --json number,title | jq -r '.[0].number')
+          echo "issue_number=$ISSUE" >> $GITHUB_OUTPUT
+
+      - name: Add comment to release issue
+        if: steps.find_issue.outputs.issue_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GIT_ISSUE_TOKEN }}
+        run: |
+          echo "**Fix Date:** $(date)" > comment.txt
+          echo "**Author:** ${{ github.actor }}" >> comment.txt
+          echo -e "**Commits:**\n${{ steps.changelog.outputs.commits }}" >> comment.txt
+          echo "" >> comment.txt
+          echo "Docker: $IMAGE_NAME:${{ steps.vars.outputs.FIX_VERSION }}" >> comment.txt
+
+          gh issue comment ${{ steps.find_issue.outputs.issue_number }} --body-file comment.txt
